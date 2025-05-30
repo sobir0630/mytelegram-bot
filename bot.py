@@ -18,9 +18,12 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 import re
 import re
+from dotenv import load_dotenv
+import os
 
 # Configuration
-BOT_TOKEN = "7873772519:AAHJ3-34oFak9hIYqWYvpMXRazkvQo6Oq_k"
+load_dotenv()
+BOT_TOKEN = os.getenv"bot_token"
 ADMIN_IDS = [6752780496, 6053691166]  # Add admin user IDs here
 
 # Database setup
