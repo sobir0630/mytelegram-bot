@@ -20,7 +20,7 @@ import re
 import re
 
 # Configuration
-BOT_TOKEN = "7873772519:AAGpwd8LcRb_7WISG751TWbQUYuZoi44hBk"
+BOT_TOKEN = "7873772519:AAHJ3-34oFak9hIYqWYvpMXRazkvQo6Oq_k"
 ADMIN_IDS = [6752780496, 6053691166]  # Add admin user IDs here
 
 # Database setup
