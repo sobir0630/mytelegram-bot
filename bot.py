@@ -110,6 +110,7 @@ class EditCarStates(StatesGroup):
     waiting_for_new_credit_percent = State()
     waiting_for_new_initial_payment = State()
     waiting_for_new_credit_note = State()
+    waiting_for_new_additional_note = State()
 
 
 # Data classes
@@ -351,7 +352,7 @@ def format_car_message(car: Car, user_id: int) -> str:
     
     message = f"🚗 **{car.name}**\n\n"
     message += f"📝 {car.description}\n\n"
-    message += f"💰 Narx: {car.price:,.0f} so'm\n"
+    message += f"💰 Narx: {car.price:,.0f}$\n"
     message += f"🏷️ Turi: {TEXTS[lang][car.car_type]}\n\n"
     
     if car.car_type == 'credit' and car.credit_months:
@@ -360,7 +361,7 @@ def format_car_message(car: Car, user_id: int) -> str:
         if car.credit_percent:
             message += f"📊 Foiz: {car.credit_percent}%\n"
         if car.initial_payment:
-            message += f"💵 Boshlang'ich to'lov: {car.initial_payment:,.0f} so'm\n"
+            message += f"💵 Boshlang'ich to'lov: {car.initial_payment:,.0f}$\n"
         if car.credit_note:
             message += f"📋 Kredit izohi: {car.credit_note}\n"
         message += "\n"
@@ -646,105 +647,100 @@ async def process_car_type(callback: CallbackQuery, state: FSMContext):
     if car_type == 'credit':
         await state.set_state(AddCarStates.waiting_for_credit_months)
         await callback.message.edit_text("📆 Kredit muddatini kiriting (masalan: 10 yoki 10 oy):")
-
-        @dp.message(StateFilter(AddCarStates.waiting_for_credit_months))
-        async def process_credit_months(message: Message, state: FSMContext):
-            text = message.text.strip().lower()
-            # Extract number from input (e.g. "10 oy" or "10")
-            match = re.search(r'(\d+)', text)
-            if not match:
-                await message.answer("❌ Iltimos, kredit muddatini raqamda kiriting (masalan: 10 yoki 10 oy)!")
-                return
-            months = int(match.group(1))
-            await state.update_data(credit_months=months)
-            await state.set_state(AddCarStates.waiting_for_initial_payment)
-            await message.answer("💵 Boshlang'ich to'lov summasini kiriting (faqat raqam):")
-
-        @dp.message(StateFilter(AddCarStates.waiting_for_initial_payment))
-        async def process_initial_payment(message: Message, state: FSMContext):
-            try:
-                initial_payment = float(message.text.replace(" ", ""))
-                await state.update_data(initial_payment=initial_payment)
-                await state.set_state(AddCarStates.waiting_for_credit_percent)
-                await message.answer("📊 Kredit foizini kiriting (masalan: 20 yoki 20%):")
-            except ValueError:
-                await message.answer("❌ Iltimos, faqat raqam kiriting!")
-
-        @dp.message(StateFilter(AddCarStates.waiting_for_credit_percent))
-        async def process_credit_percent(message: Message, state: FSMContext):
-            text = message.text.strip().replace("%", "")
-            try:
-                percent = float(text)
-                await state.update_data(credit_percent=percent)
-                car_data = await state.get_data()
-                price = car_data.get("price", 0)
-                months = car_data.get("credit_months", 1)
-                initial_payment = car_data.get("initial_payment", 0)
-                kredit_summa = price - initial_payment
-                # Oddiy foiz hisoblash (yillik emas, oylik oddiy)
-                umumiy_qarz = kredit_summa + (kredit_summa * percent / 100)
-                oyiga_tolov = umumiy_qarz / months if months else kredit_summa
-                await state.update_data(oyiga_tolov=oyiga_tolov)
-                await state.set_state(AddCarStates.waiting_for_additional_note)
-                msg = (
-                    f"💳 Kredit shartlari:\n"
-                    f"• Muddat: {months} oy\n"
-                    f"• Boshlang'ich to'lov: {initial_payment:,.0f} so'm\n"
-                    f"• Foiz: {percent}%\n"
-                    f"• Kredit summasi: {kredit_summa:,.0f} so'm\n"
-                    f"• Oyiga to'lov: {oyiga_tolov:,.0f} so'm\n\n"
-                    f"✍️ Qo'shimcha izoh kiriting yoki '-' deb yozing:"
-                )
-                await message.answer(msg)
-            except ValueError:
-                await message.answer("❌ Iltimos, faqat raqam yoki foiz kiriting!")
-
-        @dp.message(StateFilter(AddCarStates.waiting_for_additional_note))
-        async def process_additional_note(message: Message, state: FSMContext):
-            note = message.text if message.text != "-" else ""
-            await state.update_data(additional_note=note)
-            car_data = await state.get_data()
-            # Tasdiqlash uchun tugma
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [InlineKeyboardButton(text="✅ Men roziman, saqlash", callback_data="save_car_confirm")]
-                ]
-            )
-            msg = (
-                f"🚘 Mashina nomi: {car_data.get('name')}\n"
-                f"💰 Narxi: {car_data.get('price'):,.0f} so'm\n"
-                f"💳 Kredit: {car_data.get('credit_months')} oy, "
-                f"{car_data.get('credit_percent')}%, "
-                f"boshlang'ich {car_data.get('initial_payment'):,.0f} so'm\n"
-                f"📋 Qo'shimcha: {car_data.get('additional_note') or '-'}\n"
-                f"• Oyiga to'lov: {car_data.get('oyiga_tolov'):,.0f} so'm\n\n"
-                f"Saqlash uchun pastdagi tugmani bosing."
-            )
-            await message.answer(msg, reply_markup=keyboard)
-
-        @dp.callback_query(F.data == "save_car_confirm")
-        async def save_car_confirm(callback: CallbackQuery, state: FSMContext):
-            car_data = await state.get_data()
-            # remove oyiga_tolov from car_data before saving
-            car_data.pop("oyiga_tolov", None)
-            save_car(car_data)
-            await state.clear()
-            await callback.message.edit_text("✅ Mashina saqlandi!", reply_markup=None)
-            await callback.message.answer(
-                "🏠 Asosiy menyu", reply_markup=get_main_keyboard(callback.from_user.id)
-            )
     else:
         await state.set_state(AddCarStates.waiting_for_additional_note)
         await callback.message.edit_text("✍️ Qo'shimcha izoh kiriting:")
         await state.update_data(additional_note=callback.message.text if callback.message else "")
-        @dp.message(StateFilter(AddCarStates.waiting_for_additional_note))
-        async def process_additional_note(message: Message, state: FSMContext):
-            await state.update_data(additional_note=message.text)
-            car_data = await state.get_data()
-            save_car(car_data)
-            await state.clear()
-            user_id = message.from_user.id
-            await message.answer("✅ Mashina saqlandi!", reply_markup=get_main_keyboard(user_id))
+
+# Move these handlers to top-level (not nested)
+@dp.message(StateFilter(AddCarStates.waiting_for_credit_months))
+async def process_credit_months(message: Message, state: FSMContext):
+    text = message.text.strip().lower()
+    match = re.search(r'(\d+)', text)
+    if not match:
+        await message.answer("❌ Iltimos, kredit muddatini raqamda kiriting (masalan: 10 yoki 10 oy)!")
+        return
+    months = int(match.group(1))
+    await state.update_data(credit_months=months)
+    await state.set_state(AddCarStates.waiting_for_initial_payment)
+    await message.answer("💵 Boshlang'ich to'lov summasini kiriting (faqat raqam):")
+
+@dp.message(StateFilter(AddCarStates.waiting_for_initial_payment))
+async def process_initial_payment(message: Message, state: FSMContext):
+    try:
+        initial_payment = float(message.text.replace(" ", ""))
+        await state.update_data(initial_payment=initial_payment)
+        await state.set_state(AddCarStates.waiting_for_credit_percent)
+        await message.answer("📊 Kredit foizini kiriting (masalan: 20 yoki 20%):")
+    except ValueError:
+        await message.answer("❌ Iltimos, faqat raqam kiriting!")
+
+@dp.message(StateFilter(AddCarStates.waiting_for_credit_percent))
+async def process_credit_percent(message: Message, state: FSMContext):
+    text = message.text.strip().replace("%", "")
+    try:
+        percent = float(text)
+        await state.update_data(credit_percent=percent)
+        car_data = await state.get_data()
+        price = car_data.get("price", 0)
+        months = car_data.get("credit_months", 1)
+        initial_payment = car_data.get("initial_payment", 0)
+        kredit_summa = price - initial_payment
+        umumiy_qarz = kredit_summa + (kredit_summa * percent / 100)
+        oyiga_tolov = umumiy_qarz / months if months else kredit_summa
+        await state.update_data(oyiga_tolov=oyiga_tolov)
+        await state.set_state(AddCarStates.waiting_for_additional_note)
+        msg = (
+            f"💳 Kredit shartlari:\n"
+            f"• Muddat: {months} oy\n"
+            f"• Boshlang'ich to'lov: {initial_payment:,.0f} $\n"
+            f"• Foiz: {percent}%\n"
+            f"• Kredit summasi: {kredit_summa:,.0f} $\n"
+            f"• Oyiga to'lov: {oyiga_tolov:,.0f} $\n\n"
+            f"✍️ Qo'shimcha izoh kiriting yoki '-' deb yozing:"
+        )
+        await message.answer(msg)
+    except ValueError:
+        await message.answer("❌ Iltimos, faqat raqam yoki foiz kiriting!")
+
+@dp.message(StateFilter(AddCarStates.waiting_for_additional_note))
+async def process_additional_note(message: Message, state: FSMContext):
+    note = message.text if message.text != "-" else ""
+    await state.update_data(additional_note=note)
+    car_data = await state.get_data()
+    if car_data.get("car_type") == "credit":
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Men roziman, saqlash", callback_data="save_car_confirm")]
+            ]
+        )
+        msg = (
+            f"🚘 Mashina nomi: {car_data.get('name')}\n"
+            f"💰 Narxi: {car_data.get('price'):,.0f} $\n"                 
+            f"💳 Kredit: {car_data.get('credit_months')} oy, "
+            f"{car_data.get('credit_percent')}%, "
+            f"boshlang'ich {car_data.get('initial_payment'):,.0f} $\n"
+            f"📋 Qo'shimcha: {car_data.get('additional_note') or '-'}\n"
+            f"• Oyiga to'lov: {car_data.get('oyiga_tolov'):,.0f} $\n\n"
+            f"Saqlash uchun pastdagi tugmani bosing."
+        )
+        await message.answer(msg, reply_markup=keyboard)
+    else:
+        save_car(car_data)
+        await state.clear()
+        user_id = message.from_user.id
+        await message.answer("✅ Mashina saqlandi!", reply_markup=get_main_keyboard(user_id))
+
+@dp.callback_query(F.data == "save_car_confirm")
+async def save_car_confirm(callback: CallbackQuery, state: FSMContext):
+    car_data = await state.get_data()
+    car_data.pop("oyiga_tolov", None)
+    save_car(car_data)
+    await state.clear()
+    await callback.message.edit_text("✅ Mashina saqlandi!", reply_markup=None)
+    await callback.message.answer(
+        "🏠 Asosiy menyu", reply_markup=get_main_keyboard(callback.from_user.id)
+    )
 
 # Continue with remaining admin handlers for car addition...
 # (The rest of the FSM states would follow similar patterns)
@@ -953,6 +949,8 @@ async def edit_car_menu(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="💬 Tavsifini o'zgartirish", callback_data="edit_description")],
         [InlineKeyboardButton(text="💰 Narxini o'zgartirish", callback_data="edit_price")],
         [InlineKeyboardButton(text="🖼 Rasmini o'zgartirish", callback_data="edit_photo")],
+        [InlineKeyboardButton(text="📝 Kredit izohini o'zgartirish", callback_data="edit_credit_note")],
+        [InlineKeyboardButton(text="💬 Qo'shimcha izohni o'zgartirish", callback_data="edit_additional_note")],
         [InlineKeyboardButton(text="💳 Kredit shartlarini o'zgartirish", callback_data="edit_credit")]
     ])
     
@@ -975,6 +973,118 @@ async def process_new_name(message: Message, state: FSMContext):
     conn.close()
     
     await message.answer("✅ Nomi muvaffaqiyatli o'zgartirildi!")
+    await state.clear()
+
+@dp.callback_query(F.data == "edit_description")
+async def start_edit_description(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(EditCarStates.waiting_for_new_description)
+    await callback.message.edit_text("📝 Yangi tavsifni kiriting:")
+
+@dp.message(StateFilter(EditCarStates.waiting_for_new_description))
+async def process_new_description(message: Message, state: FSMContext):
+    data = await state.get_data()
+    car_id = data['edit_car_id']  # oldindan tanlangan mashina ID si
+
+    conn = sqlite3.connect('car_bot.db')
+    cursor = conn.cursor()
+    cursor.execute("UPDATE cars SET description = ? WHERE id = ?", (message.text, car_id))
+    conn.commit()
+    conn.close()
+
+    await message.answer("✅ Tavsif muvaffaqiyatli o'zgartirildi!")
+    await state.clear()
+
+
+@dp.callback_query(F.data == "edit_price")
+async def start_edit_price(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(EditCarStates.waiting_for_new_price)
+    await callback.message.edit_text("💰 Yangi narxni kiriting (faqat raqam):")
+
+@dp.message(StateFilter(EditCarStates.waiting_for_new_price))
+async def process_new_price(message: Message, state: FSMContext):
+    try:
+        new_price = float(message.text.replace(" ", ""))
+    except ValueError:
+        await message.answer("❌ Iltimos, faqat raqam kiriting!")
+        return
+
+    data = await state.get_data()
+    car_id = data['edit_car_id']  # oldindan tanlangan mashina ID si
+
+    conn = sqlite3.connect('car_bot.db')
+    cursor = conn.cursor()
+    cursor.execute("UPDATE cars SET price = ? WHERE id = ?", (new_price, car_id))
+    conn.commit()
+    conn.close()
+
+    await message.answer("✅ Narx muvaffaqiyatli o'zgartirildi!")
+    await state.clear()
+
+
+@dp.callback_query(F.data == "edit_photo")
+async def start_edit_photo(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(EditCarStates.waiting_for_new_photo)
+    await callback.message.edit_text("🖼 Yangi rasmni yuboring:")
+
+@dp.message(StateFilter(EditCarStates.waiting_for_new_photo), F.photo)
+async def process_new_photo(message: Message, state: FSMContext):
+    data = await state.get_data()
+    car_id = data['edit_car_id']  # oldindan tanlangan mashina ID si
+
+    # Rasmni saqlash
+    photo = message.photo[-1]
+    photo_path = f"photos/car_{car_id}_{photo.file_id}.jpg"
+    os.makedirs("photos", exist_ok=True)
+    await message.bot.download(photo, destination=photo_path)
+
+    # Bazaga yozish
+    conn = sqlite3.connect('car_bot.db')
+    cursor = conn.cursor()
+    cursor.execute("UPDATE cars SET photo_path = ? WHERE id = ?", (photo_path, car_id))
+    conn.commit()
+    conn.close()
+
+    await message.answer("✅ Rasm muvaffaqiyatli o'zgartirildi!")
+    await state.clear()
+
+@dp.callback_query(F.data == "edit_credit_note")
+async def start_edit_credit_note(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(EditCarStates.waiting_for_new_credit_note)
+    await callback.message.edit_text("📝 Yangi kredit izohini kiriting:")
+
+@dp.message(StateFilter(EditCarStates.waiting_for_new_credit_note))
+async def process_new_credit_note(message: Message, state: FSMContext):
+    data = await state.get_data()
+    car_id = data['edit_car_id']
+
+    conn = sqlite3.connect('car_bot.db')
+    cursor = conn.cursor()
+    cursor.execute("UPDATE cars SET credit_note = ? WHERE id = ?", (message.text, car_id))
+    conn.commit()
+    conn.close()
+
+    await message.answer("✅ Kredit izohi muvaffaqiyatli o'zgartirildi!")
+    await state.clear()
+
+
+@dp.callback_query(F.data == "edit_additional_note")
+async def start_edit_additional_note(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(EditCarStates.waiting_for_new_additional_note)
+    await callback.message.edit_text("💬 Yangi qo'shimcha izohni kiriting:")
+
+
+@dp.message(StateFilter(EditCarStates.waiting_for_new_additional_note))
+async def process_new_additional_note(message: Message, state: FSMContext):
+    data = await state.get_data()
+    car_id = data['edit_car_id']
+
+    conn = sqlite3.connect('car_bot.db')
+    cursor = conn.cursor()
+    cursor.execute("UPDATE cars SET additional_note = ? WHERE id = ?", (message.text, car_id))
+    conn.commit()
+    conn.close()
+
+    await message.answer("✅ Qo'shimcha izoh muvaffaqiyatli o'zgartirildi!")
     await state.clear()
 
 @dp.callback_query(F.data == "edit_credit")
