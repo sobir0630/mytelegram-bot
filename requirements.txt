@@ -13,5 +13,5 @@ orjson==3.10.18
 pydantic==2.5.3
 python-telegram-bot==22.0
 requests==2.32.3
-starlette==0.46.2
+starlette==0.37.2
 uvicorn==0.34.2
