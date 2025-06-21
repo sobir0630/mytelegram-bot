@@ -350,13 +350,13 @@ def get_admin_keyboard(user_id: int) -> ReplyKeyboardMarkup:
 def format_car_message(car: Car, user_id: int) -> str:
     lang = get_user_language(user_id)
     
-    message = f"🚗 **{car.name}**\n\n"
+    message = f"🚗 <b>{car.name}</b>\n\n"
     message += f"📝 {car.description}\n\n"
     message += f"💰 Narx: {car.price:,.0f}$\n"
     message += f"🏷️ Turi: {TEXTS[lang][car.car_type]}\n\n"
     
     if car.car_type == 'credit' and car.credit_months:
-        message += f"💳 **Kredit shartlari:**\n"
+        message += f"💳 <b>Kredit shartlari:</b>\n"
         message += f"📅 Muddat: {car.credit_months} oy\n"
         if car.credit_percent:
             message += f"📊 Foiz: {car.credit_percent}%\n"
@@ -370,6 +370,7 @@ def format_car_message(car: Car, user_id: int) -> str:
         message += f"💬 Qo'shimcha ma'lumot: {car.additional_note}\n"
     
     return message
+
 
 # Handlers
 @dp.message(Command("start"))
@@ -450,13 +451,15 @@ async def show_cars(callback: CallbackQuery):
                 photo=FSInputFile(car.photo_path),
                 caption=message_text,
                 reply_markup=keyboard,
-                parse_mode="Markdown"
-            )
+                parse_mode="HTML"  # Markdown o‘rniga HTML
+)
+
+            
         else:
             await callback.message.answer(
                 message_text,
                 reply_markup=keyboard,
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
 
 @dp.callback_query(F.data.startswith("apply_"))
@@ -541,13 +544,13 @@ async def process_search(message: Message, state: FSMContext):
                 photo=FSInputFile(car.photo_path),
                 caption=message_text,
                 reply_markup=keyboard,
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         else:
             await message.answer(
                 message_text,
                 reply_markup=keyboard,
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
 
 @dp.message(F.text.in_(["📋 Arizalarim", "📋 Мои заявки"]))
@@ -567,7 +570,7 @@ async def my_applications_handler(message: Message):
         message_text += f"📅 Sana: {app.created_at}\n"
         message_text += f"📊 Holat: {status_text}"
         
-        await message.answer(message_text, parse_mode="Markdown")
+        await message.answer(message_text, parse_mode="HTML")
 
 # Admin handlers
 @dp.message(F.text.in_(["👨‍💼 Admin panel", "👨‍💼 Админ панель"]))
@@ -865,13 +868,13 @@ async def show_cars_page(message: Message, user_id: int, page: int):
                 photo=FSInputFile(car.photo_path),
                 caption=message_text,
                 reply_markup=keyboard,
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         else:
             await message.answer(
                 message_text,
                 reply_markup=keyboard,
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
     
     # Keyingi/Oldingi sahifa tugmalarini ko'rsatish
