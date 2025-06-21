@@ -1,5 +1,5 @@
 aiofiles==23.1.0
-aiogram==3.0.0
+aiogram==3.4.1
 python-dotenv
 aiohttp
 anyio==4.9.0
