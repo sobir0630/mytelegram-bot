@@ -2,16 +2,7 @@ aiofiles==23.2.1
 aiogram==3.4.1
 python-dotenv
 aiohttp
-anyio==4.9.0
-blinker==1.9.0
-fastapi==0.110.0          # ⚠️ 0.111.0 emas
-Flask==3.1.0
-httpx==0.24.1              # ✅ barcha uchun mos
-Jinja2==3.1.6
-MarkupSafe==3.0.2
+fastapi==0.110.0
 ujson==5.9.0
-pydantic==2.5.3
-python-telegram-bot==20.3  # ✅ Rust talab qilmaydi
 requests==2.32.3
-starlette==0.37.2
 uvicorn==0.34.2
