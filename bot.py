@@ -20,7 +20,7 @@ import re
 import re
 
 
-# Configuration
+# Configuratio
 BOT_TOKEN = ("7873772519:AAHH-fIjUhUT8MOfw9GGyuQM3F4qSwWomto")
 ADMIN_IDS = [6752780496]  # Add admin user IDs here
 
